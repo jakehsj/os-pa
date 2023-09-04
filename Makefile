@@ -1,3 +1,18 @@
+# SNU ----------------------------------------------------
+# Please specify the PA number and your student ID:
+PANUM =
+STUDENTID =
+
+ifndef PANUM
+$(error Please set PANUM in Makefile)
+endif
+ifndef STUDENTID
+$(error Please set STUDENTID in Makefile)
+endif
+_PANUM = $(strip $(PANUM))
+_STUDENTID = $(strip $(STUDENTID))
+#---------------------------------------------------------
+
 K=kernel
 U=user
 
@@ -56,7 +71,7 @@ LD = $(TOOLPREFIX)ld
 OBJCOPY = $(TOOLPREFIX)objcopy
 OBJDUMP = $(TOOLPREFIX)objdump
 
-CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2
+CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb -gdwarf-2 -DSNU
 CFLAGS += -MD
 CFLAGS += -mcmodel=medany
 CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
@@ -171,3 +186,14 @@ qemu-gdb: $K/kernel .gdbinit fs.img
 	@echo "*** Now run 'gdb' in another window." 1>&2
 	$(QEMU) $(QEMUOPTS) -S $(QEMUGDB)
 
+
+# SNU ----------------------------------------------------
+TARBALL = ../xv6-$(_PANUM)-$(_STUDENTID).tar.gz
+FILES = ./Makefile ./$K ./$U ./mkfs
+
+submit:
+	@make clean
+	@rm -f $(TARBALL)
+	@tar cvzf $(TARBALL) $(FILES)
+	@echo "Please submit $(TARBALL) file"
+#---------------------------------------------------------
