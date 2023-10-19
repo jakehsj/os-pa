@@ -15,6 +15,11 @@ struct proc *initproc;
 int nextpid = 1;
 struct spinlock pid_lock;
 
+#ifdef SNU
+#define NICE_TO_PRIO(n)   ((n) + 3)
+int prio_ratio[] = {1, 2, 3, 5, 7, 9, 11};
+#endif
+
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
@@ -169,6 +174,9 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+#ifdef SNU
+  p->ticks = 0;
+#endif
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -505,6 +513,9 @@ yield(void)
   struct proc *p = myproc();
   acquire(&p->lock);
   p->state = RUNNABLE;
+#ifdef SNU
+  p->ticks++;
+#endif
   sched();
   release(&p->lock);
 }
@@ -681,3 +692,21 @@ procdump(void)
     printf("\n");
   }
 }
+
+#ifdef SNU
+int
+getticks(int pid)
+{
+  struct proc *p;
+
+  if (pid == 0)
+    return myproc()->ticks;
+
+  // We don't need an accurate value.
+  // So, we read the ticks without acquiring a lock.
+  for (p = proc; p < &proc[NPROC]; p++)
+    if (p->pid == pid)
+      return p->ticks;
+  return -1;
+}
+#endif

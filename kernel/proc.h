@@ -92,6 +92,13 @@ struct proc {
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
 
+#ifdef SNU
+  // The following fields are added for PA3.
+  // Add more if needed.
+  int nice;                    // Nice value (-3 <= nice <= 3)
+  int ticks;                   // Total number of ticks used
+#endif
+
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
 

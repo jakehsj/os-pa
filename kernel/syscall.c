@@ -101,6 +101,10 @@ extern uint64 sys_unlink(void);
 extern uint64 sys_link(void);
 extern uint64 sys_mkdir(void);
 extern uint64 sys_close(void);
+#ifdef SNU
+extern uint64 sys_nice(void);
+extern uint64 sys_getticks(void);
+#endif
 
 // An array mapping syscall numbers from syscall.h
 // to the function that handles the system call.
@@ -126,6 +130,10 @@ static uint64 (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+#ifdef SNU
+[SYS_nice]    sys_nice,
+[SYS_getticks] sys_getticks,
+#endif
 };
 
 void
