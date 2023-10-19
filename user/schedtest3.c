@@ -1,6 +1,6 @@
 //----------------------------------------------------------------
 //
-//  4190.308 Operating Systems (Fall 2023)
+//  4190.307 Operating Systems (Fall 2023)
 //
 //  Project #3: BTS (Brain Teased Scheduler)
 //
