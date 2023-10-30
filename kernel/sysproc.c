@@ -91,17 +91,33 @@ sys_uptime(void)
 }
 
 #ifdef SNU
+extern struct proc proc[NPROC];
 uint64
 sys_nice(void)
 {
-
-  // PA3: Fill here!
-
-
-
-
-
-  return 0;
+  // acquire(&tickslock)
+  int pid, value;
+  argint(0, &pid);
+  argint(1, &value);
+  struct proc *p;
+  if(value < -3 || value > 3){
+    release(&tickslock);
+    return -1;
+  }
+  if(pid == 0){
+    myproc()->nice = value;
+    release(&tickslock);
+    return 0;
+  }
+  for(p = proc; p < &proc[NPROC]; p++){
+    if(p->pid == pid){
+      p->nice = value;
+      release(&tickslock);
+      return 0;
+    }
+  }
+  // release(&tickslock);
+  return -1;
 }
 
 uint64
