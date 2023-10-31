@@ -1,0 +1,9 @@
+{
+    "C_Cpp.errorSquiggles": "disabled",
+    "files.associations": {
+        "atomic": "c",
+        "semaphore": "c",
+        "mutex": "c",
+        "stop_token": "c"
+    }
+}

@@ -97,6 +97,7 @@ struct proc {
   // Add more if needed.
   int nice;                    // Nice value (-3 <= nice <= 3)
   int ticks;                   // Total number of ticks used
+  int vir_dead;       // Virtual deadline
 #endif
 
   // wait_lock must be held when using this:
