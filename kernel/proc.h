@@ -105,3 +105,10 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
+
+struct global_stats {
+  int num_syscall;
+  int num_interrupt;
+  int num_timer;
+  struct spinlock lock;
+};
