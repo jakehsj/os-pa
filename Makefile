@@ -1,18 +1,18 @@
 # SNU ----------------------------------------------------
 # Do not change the following PANUM
-PANUM = pa3
+PANUM = pa4
 # Please specify your student ID:
 STUDENTID =
 
 _PANUM = $(strip $(PANUM))
-ifneq ($(_PANUM), pa3)
+ifneq ($(_PANUM), pa4)
 $(error Please set PANUM to pa3)
 endif
 ifndef STUDENTID
 $(error Please set STUDENTID in Makefile)
 endif
 ifneq ($(shell git rev-parse --abbrev-ref HEAD), $(_PANUM))
-$(error You are not on pa3 branch; do "$$ git checkout $(_PANUM)")
+$(error You are not on $(_PANUM) branch; do "$$ git checkout $(_PANUM)")
 endif
 _STUDENTID = $(strip $(STUDENTID))
 #---------------------------------------------------------
