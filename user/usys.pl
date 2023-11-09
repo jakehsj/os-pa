@@ -36,3 +36,8 @@ entry("getpid");
 entry("sbrk");
 entry("sleep");
 entry("uptime");
+# SNU
+entry("kcall");
+entry("ktest");
+entry("mmap");
+entry("munmap");

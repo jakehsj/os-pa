@@ -22,6 +22,12 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
+#ifdef SNU
+int kcall(int);
+void *ktest(int, void *);
+void *mmap(void *addr, int length, int prot, int flags);
+int munmap(void *addr);
+#endif
 
 // ulib.c
 int stat(const char*, struct stat*);

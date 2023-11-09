@@ -20,3 +20,10 @@
 #define SYS_link   19
 #define SYS_mkdir  20
 #define SYS_close  21
+
+#ifdef SNU
+#define SYS_kcall  22
+#define SYS_ktest  23
+#define SYS_mmap   24
+#define SYS_munmap 25
+#endif

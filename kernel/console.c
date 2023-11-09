@@ -155,6 +155,11 @@ consoleintr(int c)
       consputc(BACKSPACE);
     }
     break;
+#ifdef SNU
+  case C('F'):
+    printf("%d (freemem), %d (4K), %d (2M), %d (PF)\n", freemem, used4k, used2m, pagefaults);
+    break;
+#endif
   default:
     if(c != 0 && cons.e-cons.r < INPUT_BUF_SIZE){
       c = (c == '\r') ? '\n' : c;

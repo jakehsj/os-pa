@@ -15,6 +15,10 @@ struct proc *initproc;
 int nextpid = 1;
 struct spinlock pid_lock;
 
+#ifdef SNU
+int pagefaults;
+#endif
+
 extern void forkret(void);
 static void freeproc(struct proc *p);
 
@@ -681,3 +685,15 @@ procdump(void)
     printf("\n");
   }
 }
+
+#ifdef SNU
+void
+pagefault(uint64 scause, uint64 stval)
+{
+  pagefaults++;
+
+  // PA4: FILL HERE
+
+  panic("page fault");
+}
+#endif
