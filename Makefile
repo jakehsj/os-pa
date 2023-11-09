@@ -6,7 +6,7 @@ STUDENTID =
 
 _PANUM = $(strip $(PANUM))
 ifneq ($(_PANUM), pa4)
-$(error Please set PANUM to pa3)
+$(error Please set PANUM to pa4)
 endif
 ifndef STUDENTID
 $(error Please set STUDENTID in Makefile)
