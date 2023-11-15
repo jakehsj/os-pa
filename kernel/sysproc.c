@@ -89,3 +89,15 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_ntraps(void)
+{
+  int type;
+  int res;
+  argint(0,&type);
+  if(type == 0) res = shared_stats.num_syscall;
+  else if(type == 1) res = shared_stats.num_interrupt + shared_stats.num_timer;
+  else res = shared_stats.num_timer;
+  return res;
+}

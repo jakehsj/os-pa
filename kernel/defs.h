@@ -8,6 +8,7 @@ struct spinlock;
 struct sleeplock;
 struct stat;
 struct superblock;
+struct global_stats;
 
 // bio.c
 void            binit(void);
@@ -145,7 +146,9 @@ void            syscall();
 extern uint     ticks;
 void            trapinit(void);
 void            trapinithart(void);
+void            initialize_shared_stats(void);
 extern struct spinlock tickslock;
+extern struct global_stats shared_stats;
 void            usertrapret(void);
 
 // uart.c

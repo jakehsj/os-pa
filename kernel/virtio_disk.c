@@ -15,6 +15,7 @@
 #include "fs.h"
 #include "buf.h"
 #include "virtio.h"
+#include "proc.h"
 
 // the address of virtio mmio register r.
 #define R(r) ((volatile uint32 *)(VIRTIO0 + (r)))
@@ -295,7 +296,6 @@ void
 virtio_disk_intr()
 {
   acquire(&disk.vdisk_lock);
-
   // the device won't raise another interrupt until we tell it
   // we've seen this interrupt, which the following line does.
   // this may race with the device writing new entries to
@@ -322,6 +322,6 @@ virtio_disk_intr()
 
     disk.used_idx += 1;
   }
-
+  
   release(&disk.vdisk_lock);
 }

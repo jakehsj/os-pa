@@ -6,6 +6,10 @@
 #include "proc.h"
 #include "defs.h"
 
+// PA2
+
+struct global_stats shared_stats;
+
 struct spinlock tickslock;
 uint ticks;
 
@@ -20,6 +24,14 @@ void
 trapinit(void)
 {
   initlock(&tickslock, "time");
+}
+
+void 
+initialize_shared_stats(void) {
+  shared_stats.num_syscall = 0;
+  shared_stats.num_interrupt = 0;
+  shared_stats.num_timer = 0;
+  initlock(&shared_stats.lock, "ntraps");
 }
 
 // set up to take exceptions and traps while in the kernel.
@@ -52,7 +64,6 @@ usertrap(void)
   
   if(r_scause() == 8){
     // system call
-
     if(killed(p))
       exit(-1);
 
@@ -63,7 +74,9 @@ usertrap(void)
     // an interrupt will change sepc, scause, and sstatus,
     // so enable only now that we're done with those registers.
     intr_on();
-
+    acquire(&shared_stats.lock);
+    shared_stats.num_syscall++;
+    release(&shared_stats.lock);
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
@@ -77,8 +90,9 @@ usertrap(void)
     exit(-1);
 
   // give up the CPU if this is a timer interrupt.
-  if(which_dev == 2)
+  if(which_dev == 2){
     yield();
+  }
 
   usertrapret();
 }
@@ -181,6 +195,9 @@ devintr()
 
   if((scause & 0x8000000000000000L) &&
      (scause & 0xff) == 9){
+    acquire(&shared_stats.lock);
+    shared_stats.num_interrupt++;
+    release(&shared_stats.lock);
     // this is a supervisor external interrupt, via PLIC.
 
     // irq indicates which device interrupted.
@@ -208,7 +225,9 @@ devintr()
     if(cpuid() == 0){
       clockintr();
     }
-    
+    acquire(&shared_stats.lock);
+    shared_stats.num_timer++;
+    release(&shared_stats.lock);
     // acknowledge the software interrupt by clearing
     // the SSIP bit in sip.
     w_sip(r_sip() & ~2);
