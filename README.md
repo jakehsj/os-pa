@@ -31,7 +31,7 @@ In `xv6`, the term _trap_ is used as a generic term encompassing both _exception
 * `ntraps(N_TIMER)` or `ntraps(2)` returns the total number of timer interrupts received by all cores since the system is booted.
 * Otherwise, -1 is returned.
 
-## Example
+## Skeleton code
 The `pa2` branch has a user-level utility program called `ntraps`, which simply calls the `ntraps()` system call with the given argument. The source code of the `ntraps` utility is available in the `./user/ntraps.c` file. Using this program, you can get the value returned by the `ntraps()` system call.
 
 Currently, any kernel-level implementation for supporting the `ntraps()` system call is missing. So, if you run the `ntraps` utility in the shell, you will get an error as shown below.
