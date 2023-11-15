@@ -1,49 +1,50 @@
-xv6 is a re-implementation of Dennis Ritchie's and Ken Thompson's Unix
-Version 6 (v6).  xv6 loosely follows the structure and style of v6,
-but is implemented for a modern RISC-V multiprocessor using ANSI C.
+# 4190.307 Operating Systems (Fall 2023)
+# Project #2: System Calls
 
-ACKNOWLEDGMENTS
+## Introduction
 
-xv6 is inspired by John Lions's Commentary on UNIX 6th Edition (Peer
-to Peer Communications; ISBN: 1-57398-013-7; 1st edition (June 14,
-2000)).  See also https://pdos.csail.mit.edu/6.1810/, which provides
-pointers to on-line resources for v6.
+System calls are the interfaces that allow user applications to request various services from the operating system kernel. This project aims to understand how those system calls are implemented in `xv6`.
 
-The following people have made contributions: Russ Cox (context switching,
-locking), Cliff Frey (MP), Xiao Yu (MP), Nickolai Zeldovich, and Austin
-Clements.
+## Problem specification
 
-We are also grateful for the bug reports and patches contributed by
-Takahiro Aoyagi, Silas Boyd-Wickizer, Anton Burtsev, carlclone, Ian
-Chen, Dan Cross, Cody Cutler, Mike CAT, Tej Chajed, Asami Doi,
-eyalz800, Nelson Elhage, Saar Ettinger, Alice Ferrazzi, Nathaniel
-Filardo, flespark, Peter Froehlich, Yakir Goaron, Shivam Handa, Matt
-Harvey, Bryan Henry, jaichenhengjie, Jim Huang, Matúš Jókay, John
-Jolly, Alexander Kapshuk, Anders Kaseorg, kehao95, Wolfgang Keller,
-Jungwoo Kim, Jonathan Kimmitt, Eddie Kohler, Vadim Kolontsov, Austin
-Liew, l0stman, Pavan Maddamsetti, Imbar Marinescu, Yandong Mao, Matan
-Shabtay, Hitoshi Mitake, Carmi Merimovich, Mark Morrissey, mtasm, Joel
-Nider, Hayato Ohhashi, OptimisticSide, Harry Porter, Greg Price, Jude
-Rich, segfault, Ayan Shafqat, Eldar Sehayek, Yongming Shen, Fumiya
-Shigemitsu, Cam Tenny, tyfkda, Warren Toomey, Stephen Tu, Rafael Ubal,
-Amane Uehara, Pablo Ventura, Xi Wang, WaheedHafez, Keiichi Watanabe,
-Nicolas Wolovick, wxdao, Grant Wu, Jindong Zhang, Icenowy Zheng,
-ZhUyU1997, and Zou Chang Wei.
+Your task is to implement a new system call named `ntraps()` that returns the total number of system calls or interrupts received by the `xv6` kernel. Detailed project requirements are described below.
 
+**SYNOPSIS**
+```
+#define N_SYSCALL     0
+#define N_INTERRUPT   1
+#define N_TIMER       2
 
-The code in the files that constitute xv6 is
-Copyright 2006-2022 Frans Kaashoek, Robert Morris, and Russ Cox.
+int ntraps(int type);
+```
 
-ERROR REPORTS
+**DESCRIPTION**
 
-Please send errors and suggestions to Frans Kaashoek and Robert Morris
-(kaashoek,rtm@mit.edu).  The main purpose of xv6 is as a teaching
-operating system for MIT's 6.1810, so we are more interested in
-simplifications and clarifications than new features.
+In `xv6`, the term _trap_ is used as a generic term encompassing both _exceptions_ and _interrupts_ (see Chap. 4 of the [xv6 book](http://csl.snu.ac.kr/courses/4190.307/2023-2/book-riscv-rev3.pdf)). The system call `ntraps()` is used to get the total number of system calls, interrupts, or timer interrupts received by the `xv6` kernel since the system is booted. The actual return value depends on the `type` argument, as shown below.
 
-BUILDING AND RUNNING XV6
+**RETURN VALUE**
 
-You will need a RISC-V "newlib" tool chain from
-https://github.com/riscv/riscv-gnu-toolchain, and qemu compiled for
-riscv64-softmmu.  Once they are installed, and in your shell
-search path, you can run "make qemu".
+`ntraps()` returns the following value. 
+
+* `ntraps(N_SYSCALL)` or `ntraps(0)` returns the total number of system calls (including the current `ntraps()` system call) made for all cores since the system is booted.
+* `ntraps(N_INTERRUPT)` or `ntraps(1)` returns the total number of device interrupts (including timer interrupts) received by all cores since the system is booted. Software interrupts issued by the RISC-V hart should not be counted.
+* `ntraps(N_TIMER)` or `ntraps(2)` returns the total number of timer interrupts received by all cores since the system is booted.
+* Otherwise, -1 is returned.
+
+## Example
+The `pa2` branch has a user-level utility program called `ntraps`, which simply calls the `ntraps()` system call with the given argument. The source code of the `ntraps` utility is available in the `./user/ntraps.c` file. Using this program, you can get the value returned by the `ntraps()` system call.
+
+Currently, any kernel-level implementation for supporting the `ntraps()` system call is missing. So, if you run the `ntraps` utility in the shell, you will get an error as shown below.
+
+```
+qemu-system-riscv64 -machine virt -bios none -kernel kernel/kernel -m 128M -smp 3 -nographic -global virtio-mmio.force-legacy=false -drive file=fs.img,if=none,format=raw,id=x0 -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
+
+xv6 kernel is booting
+
+hart 2 starting
+hart 1 starting
+init: starting sh
+$ ntraps
+3 ntraps: unknown sys call 22
+ntraps: kernel returns an error -1
+$

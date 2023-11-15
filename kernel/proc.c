@@ -449,78 +449,84 @@ wait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
-// void
-// scheduler(void)
-// {
-//   struct proc *p;
-//   struct cpu *c = mycpu();
-  
-//   c->proc = 0;
-//   for(;;){
-//     // Avoid deadlock by ensuring that devices can interrupt.
-//     intr_on();
-
-//     for(p = proc; p < &proc[NPROC]; p++) {
-//       acquire(&p->lock);
-//       if(p->state == RUNNABLE) {
-//         // Switch to chosen process.  It is the process's job
-//         // to release its lock and then reacquire it
-//         // before jumping back to us.
-//         p->state = RUNNING;
-//         c->proc = p;
-//         swtch(&c->context, &p->context);
-
-//         // Process is done running for now.
-//         // It should have changed its p->state before coming back.
-//         c->proc = 0;
-//       }
-//       release(&p->lock);
-//     }
-//   }
-// }
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
-  struct proc *last_p = 0;
+  
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
-    printf("scheduler\n");
     intr_on();
-    p = 0;
-    int min_virdead = 0x7fffffff;
-    for(int i=0;i<NPROC;i++){
-      acquire(&proc[i].lock);
-      printf("%d\n",proc[i].pid);
-      if(proc[i].state != RUNNABLE) continue;
-      if(proc[i].vir_dead < min_virdead){
-        p = &proc[i];
-        min_virdead = proc[i].vir_dead;
-      } else if(min_virdead == proc[i].vir_dead){
-        if(last_p != 0 && &proc[i] == last_p) p = &proc[i];
-        else{
-          if(proc[i].nice < p->nice) p = &proc[i];
-          else if(proc[i].nice == p->nice){
-            if(proc[i].pid < p->pid) p = &proc[i];
-          }
-        }
+
+    for(p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if(p->state == RUNNABLE) {
+        // Switch to chosen process.  It is the process's job
+        // to release its lock and then reacquire it
+        // before jumping back to us.
+        p->state = RUNNING;
+        c->proc = p;
+        swtch(&c->context, &p->context);
+
+        // Process is done running for now.
+        // It should have changed its p->state before coming back.
+        c->proc = 0;
       }
-      release(&proc[i].lock);
+      release(&p->lock);
     }
-    if(p == 0) continue;
-    acquire(&p->lock);
-    p->state = RUNNING;
-    c->proc = p;
-    last_p = p;
-    printf("%d\n",p->pid);
-    swtch(&c->context, &p->context);
-    printf("scheduler\n");
-    c->proc = 0;
-    release(&p->lock);
   }
 }
+// void
+// scheduler(void)
+// {
+//   struct proc *p;
+//   struct cpu *c = mycpu();
+//   struct proc *last_p = 0;
+//   c->proc = 0;
+//   for(;;){
+//     // Avoid deadlock by ensuring that devices can interrupt.
+//     printf("looping scheduler\n");
+//     intr_on();
+//     p = 0;
+//     int min_virdead = 0x7fffffff;
+//     for(int i=0;i<NPROC;i++){
+//       acquire(&proc[i].lock);
+//       // printf("%d\n",proc[i].pid);
+//       if(proc[i].state != RUNNABLE) {
+//         printf("process id %d not RUNNABLE but %d\n",proc[i].pid, proc[i].state);
+//         release(&proc[i].lock);
+//         continue;
+//       }
+//       printf("process id %d\n",proc[i].pid);
+//       printf("process vir_dead %d\n", proc[i].vir_dead);
+//       if(proc[i].vir_dead < min_virdead){
+//         p = &proc[i];
+//         min_virdead = proc[i].vir_dead;
+//       } else if(min_virdead == proc[i].vir_dead){
+//         if(last_p != 0 && &proc[i] == last_p) p = &proc[i];
+//         else{
+//           if(proc[i].nice < p->nice) p = &proc[i];
+//           else if(proc[i].nice == p->nice){
+//             if(proc[i].pid < p->pid) p = &proc[i];
+//           }
+//         }
+//       }
+//       release(&proc[i].lock);
+//     }
+//     if(p == 0) continue;
+//     acquire(&p->lock);
+//     p->state = RUNNING;
+//     c->proc = p;
+//     last_p = p;
+//     printf("%d\n",p->pid);
+//     swtch(&c->context, &p->context);
+//     printf("came back to scheduler!\n");
+//     c->proc = 0;
+//     release(&p->lock);
+//   }
+// }
 
 
 
