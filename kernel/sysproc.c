@@ -53,10 +53,13 @@ sys_sleep(void)
 {
   int n;
   uint ticks0;
-
+  struct proc *p = myproc();
   argint(0, &n);
   acquire(&tickslock);
   ticks0 = ticks;
+  #ifdef SNU
+  setsleep(p->pid);
+  #endif
   while(ticks - ticks0 < n){
     if(killed(myproc())){
       release(&tickslock);
@@ -64,6 +67,9 @@ sys_sleep(void)
     }
     sleep(&ticks, &tickslock);
   }
+  #ifdef SNU
+  wakesleep(p->pid);
+  #endif
   release(&tickslock);
   return 0;
 }
@@ -92,6 +98,8 @@ sys_uptime(void)
 
 #ifdef SNU
 extern struct proc proc[NPROC];
+extern int prio_ratio[];
+#define NICE_TO_PRIO(n)   ((n) + 3)
 uint64
 sys_nice(void)
 {
@@ -101,18 +109,22 @@ sys_nice(void)
   argint(1, &value);
   struct proc *p;
   if(value < -3 || value > 3){
-    release(&tickslock);
+    // release(&tickslock);
     return -1;
   }
   if(pid == 0){
     myproc()->nice = value;
-    release(&tickslock);
+    // release(&tickslock);
     return 0;
   }
   for(p = proc; p < &proc[NPROC]; p++){
     if(p->pid == pid){
+      acquire(&p->lock);
       p->nice = value;
-      release(&tickslock);
+      setvir_dead(p);
+      release(&p->lock);
+      // release(&tickslock);
+      // printf("ticks: %d", ticks);
       return 0;
     }
   }

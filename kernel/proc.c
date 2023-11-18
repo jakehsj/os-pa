@@ -18,6 +18,7 @@ struct spinlock pid_lock;
 #ifdef SNU
 #define NICE_TO_PRIO(n)   ((n) + 3)
 int prio_ratio[] = {1, 2, 3, 5, 7, 9, 11};
+int is_sleep[NPROC];
 #endif
 
 extern void forkret(void);
@@ -449,61 +450,39 @@ wait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
-// void
-// scheduler(void)
-// {
-//   struct proc *p;
-//   struct cpu *c = mycpu();
-  
-//   c->proc = 0;
-//   for(;;){
-//     // Avoid deadlock by ensuring that devices can interrupt.
-//     intr_on();
-
-//     for(p = proc; p < &proc[NPROC]; p++) {
-//       acquire(&p->lock);
-//       if(p->state == RUNNABLE) {
-//         // Switch to chosen process.  It is the process's job
-//         // to release its lock and then reacquire it
-//         // before jumping back to us.
-//         p->state = RUNNING;
-//         c->proc = p;
-//         swtch(&c->context, &p->context);
-
-//         // Process is done running for now.
-//         // It should have changed its p->state before coming back.
-//         c->proc = 0;
-//       }
-//       release(&p->lock);
-//     }
-//   }
-// }
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
   struct proc *last_p = 0;
+  struct proc *from_p = 0;
+  // struct proc *new_p = 0;
   c->proc = 0;
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
-    printf("scheduler\n");
     intr_on();
     p = 0;
     int min_virdead = 0x7fffffff;
+    int idx = 0;
+    int cur_idx = 0;
     for(int i=0;i<NPROC;i++){
       acquire(&proc[i].lock);
-      printf("%d\n",proc[i].pid);
-      if(proc[i].state != RUNNABLE) continue;
+      if(from_p != 0 && from_p->pid == proc[i].pid) cur_idx = i;
+      if(proc[i].state != RUNNABLE) {
+        release(&proc[i].lock);
+        continue;
+      }
       if(proc[i].vir_dead < min_virdead){
         p = &proc[i];
+        idx = i;
         min_virdead = proc[i].vir_dead;
       } else if(min_virdead == proc[i].vir_dead){
-        if(last_p != 0 && &proc[i] == last_p) p = &proc[i];
+        if(last_p != 0 && &proc[i] == last_p) {p = &proc[i]; idx = i;}
         else{
-          if(proc[i].nice < p->nice) p = &proc[i];
-          else if(proc[i].nice == p->nice){
-            if(proc[i].pid < p->pid) p = &proc[i];
+          if(proc[i].nice < p->nice && p != last_p) {p = &proc[i]; idx = i;}
+          else if(proc[i].nice == p->nice && p != last_p){
+            if(proc[i].pid < p->pid) {p = &proc[i]; idx = i;}
           }
         }
       }
@@ -512,11 +491,28 @@ scheduler(void)
     if(p == 0) continue;
     acquire(&p->lock);
     p->state = RUNNING;
+    if(from_p != 0){
+      if(is_sleep[cur_idx] != 2){
+        last_p = from_p;
+        // switched by user sleep
+        if(is_sleep[cur_idx] == 1){
+          is_sleep[cur_idx] = 2;
+          // printf("from user sleep\n");
+        }
+        // switched by timer interrupt which would go to sleeping process
+        else {
+          // printf("from timer interrupt\n");
+        }
+      }
+      // switched by kernel sleep
+      else{
+        // printf("from kernel sleep\n");
+      }
+    } 
     c->proc = p;
-    last_p = p;
-    printf("%d\n",p->pid);
     swtch(&c->context, &p->context);
-    printf("scheduler\n");
+    if(is_sleep[idx] == 0) c->proc->vir_dead = ticks + prio_ratio[NICE_TO_PRIO(c->proc->nice)];
+    from_p = c->proc;
     c->proc = 0;
     release(&p->lock);
   }
@@ -559,6 +555,7 @@ yield(void)
   acquire(&p->lock);
   p->state = RUNNABLE;
 #ifdef SNU
+  // printf("yield pid: %d\n", p->pid);
   p->ticks++;
 #endif
   sched();
@@ -606,9 +603,9 @@ sleep(void *chan, struct spinlock *lk)
   // Go to sleep.
   p->chan = chan;
   p->state = SLEEPING;
-
+  // printf("before sleep sched ticks: %d\n", ticks);
   sched();
-
+  // printf("after sleep sched ticks: %d\n", ticks);
   // Tidy up.
   p->chan = 0;
 
@@ -750,8 +747,38 @@ getticks(int pid)
   // We don't need an accurate value.
   // So, we read the ticks without acquiring a lock.
   for (p = proc; p < &proc[NPROC]; p++)
-    if (p->pid == pid)
+    if (p->pid == pid){
+      // printf("ticks: %d\n", ticks);
       return p->ticks;
+    }
   return -1;
+}
+
+void
+setsleep(int pid){
+  for(int i=0;i<NPROC;i++){
+    if(proc[i].pid == pid){
+      is_sleep[i] = 1;
+      break;
+    }
+  }
+  return;
+}
+
+void
+wakesleep(int pid){
+  for(int i=0;i<NPROC;i++){
+    if(proc[i].pid == pid){
+      is_sleep[i] = 0;
+      break;
+    }
+  }
+  return;
+}
+
+void
+setvir_dead(struct proc *p){
+  p->vir_dead = ticks + prio_ratio[NICE_TO_PRIO(p->nice)];
+  return;
 }
 #endif

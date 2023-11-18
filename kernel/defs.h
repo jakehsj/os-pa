@@ -108,6 +108,9 @@ int             either_copyin(void *dst, int user_src, uint64 src, uint64 len);
 void            procdump(void);
 #ifdef SNU
 int             getticks(int);
+void            setsleep(int);
+void            wakesleep(int);
+void            setvir_dead(struct proc*);
 #endif
 
 // swtch.S
