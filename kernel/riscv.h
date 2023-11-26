@@ -334,9 +334,14 @@ typedef uint64 *pagetable_t; // 512 PTEs
 
 #define PGSIZE 4096 // bytes per page
 #define PGSHIFT 12  // bits of offset within a page
+#define NULL ((void*)0)
+#define HUGE_PAGE_SIZE (2 * 1024 * 1024)  // 2MiB
+#define NUM_SMALL_PAGES_IN_HUGE_PAGE (HUGE_PAGE_SIZE / PGSIZE) // 512
 
 #define PGROUNDUP(sz)  (((sz)+PGSIZE-1) & ~(PGSIZE-1))
 #define PGROUNDDOWN(a) (((a)) & ~(PGSIZE-1))
+#define PGHGROUNDUP(sz) (((sz)+HUGE_PAGE_SIZE-1) & ~(HUGE_PAGE_SIZE-1))
+#define PGHGROUNDDOWN(a) (((a)) & ~(HUGE_PAGE_SIZE-1))
 
 #define PTE_V (1L << 0) // valid
 #define PTE_R (1L << 1)

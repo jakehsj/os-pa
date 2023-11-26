@@ -1,0 +1,28 @@
+pa: 0x0000000087fff000
+kmem.freelist: 0x0000000087ffe000
+
+# $ ./mmaptest3
+# mmap good
+# pagefault
+# stval: 0x0000000100000000
+# vm selected
+# addr: 0x0000000000000000
+# length: 0
+# flags: 0
+# base page alloc
+# page fault done
+# pagefault
+# stval: 0x0000000100000000
+# vm selected
+# addr: 0x0000000000000000
+# length: 0
+# flags: 0
+# base page alloc
+# panic: mappages: remap
+
+$ ./mmaptest3
+mmap good
+pagefault
+stval: 0x0000000100000000
+vm selected
+panic: pagefault

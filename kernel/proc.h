@@ -81,6 +81,15 @@ struct trapframe {
 
 enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
+struct mmapped_region { 
+  //Region Meta-Data:
+  int valid;
+  void* addr;
+  uint length;      
+  int prot;        
+  int flags;
+};
+
 // Per-process state
 struct proc {
   struct spinlock lock;
@@ -91,6 +100,7 @@ struct proc {
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
   int pid;                     // Process ID
+  struct mmapped_region vm[4];
 
   // wait_lock must be held when using this:
   struct proc *parent;         // Parent process
@@ -105,3 +115,17 @@ struct proc {
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
 };
+
+#define PROT_READ      0x0001
+#define PROT_WRITE     0x0002
+#define MAP_PRIVATE   0x0010
+#define MAP_SHARED    0x0020
+#define MAP_HUGEPAGE  0x0100
+
+pte_t *
+walk_huge(pagetable_t pagetable, uint64 va, int alloc);
+
+int 
+maphugepages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm);
+
+void unmap_vm(int idx, struct proc *p);

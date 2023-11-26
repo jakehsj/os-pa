@@ -15,9 +15,89 @@ struct proc *initproc;
 int nextpid = 1;
 struct spinlock pid_lock;
 
-#ifdef SNU
+// #ifdef SNU
 int pagefaults;
-#endif
+
+pte_t *
+walk_huge(pagetable_t pagetable, uint64 va, int alloc)
+{
+  if(va >= MAXVA)
+    panic("walk");
+
+  for(int level = 2; level > 1; level--) {
+    pte_t *pte = &pagetable[PX(level, va)];
+    if(*pte & PTE_V) {
+      pagetable = (pagetable_t)PTE2PA(*pte);
+    } else {
+      if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
+        return 0;
+      memset(pagetable, 0, PGSIZE);
+      *pte = PA2PTE(pagetable) | PTE_V;
+    }
+  }
+  return &pagetable[PX(1, va)];
+}
+
+int 
+maphugepages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
+{
+  uint64 a, last;
+  pte_t *pte;
+  if(size == 0)
+    panic("mappages: size");
+  // printf("va: %p\n",va);
+  a = PGHGROUNDDOWN(va);
+  last = PGHGROUNDDOWN(va + size - 1);
+  // printf("maphugepages pa: %p\n", pa);
+  for(;;){
+    // printf("a: %x\n",a);
+    // printf("last: %x\n",last);
+    if((pte = walk_huge(pagetable, a, 1)) == 0)
+      return -1;
+    // printf("walking done\n");
+    if(*pte & PTE_V)
+      panic("mappages: remap");
+    *pte = PA2PTE(pa) | perm | PTE_V;
+    if(a == last)
+      break;
+    a += HUGE_PAGE_SIZE;
+    pa += HUGE_PAGE_SIZE;
+  }
+  return 0;
+}
+
+
+void unmap_vm(int idx, struct proc *p){
+
+  struct mmapped_region *vm = &p->vm[idx];
+  if(!vm->valid) return;
+  void *addr = vm->addr;
+
+  if(vm->flags & MAP_HUGEPAGE){
+    pte_t *pte;
+    for(uint64 i = (uint64)addr; i < (uint64)addr + vm->length; i+=HUGE_PAGE_SIZE){
+      if((pte = walk_huge(p->pagetable, i, 0))) {
+        uint64 pa = PTE2PA(*pte);
+        *pte = 0;
+        kfree_huge((void*)pa);
+      }
+    }
+    p->vm[idx].valid = 0;
+  }
+
+  else{
+    pte_t *pte;
+    for(uint64 i = (uint64)addr; i < (uint64)addr + vm->length; i+=PGSIZE){
+      if((pte = walk(p->pagetable, i, 0))) {
+        uint64 pa = PTE2PA(*pte);
+        *pte = 0;
+        kfree((void*)pa);
+      }
+    }
+    p->vm[idx].valid = 0;
+  }
+}
+// #endif
 
 extern void forkret(void);
 static void freeproc(struct proc *p);
@@ -300,6 +380,8 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // 여기에 shared mapping / private mapping 
+
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
 
@@ -352,6 +434,14 @@ exit(int status)
 {
   struct proc *p = myproc();
 
+  acquire(&p->lock);
+  for(int i=0;i<4;i++){
+    unmap_vm(i,p);
+  }
+  // printf("unmap from exit done\n");
+  release(&p->lock);
+
+
   if(p == initproc)
     panic("init exiting");
 
@@ -383,7 +473,7 @@ exit(int status)
   p->state = ZOMBIE;
 
   release(&wait_lock);
-
+  // printf("before sched\n");
   // Jump into the scheduler, never to return.
   sched();
   panic("zombie exit");
@@ -686,14 +776,108 @@ procdump(void)
   }
 }
 
-#ifdef SNU
+// #ifdef SNU
 void
 pagefault(uint64 scause, uint64 stval)
 {
   pagefaults++;
-
+  // printf("pagefault\n");
+  // printf("stval: %p\n",stval);
   // PA4: FILL HERE
 
-  panic("page fault");
+  struct mmapped_region *vm = NULL;
+  struct proc *p = myproc();
+  acquire(&p->lock);
+
+  // this needs change vm 을 처음에 어떻게 설정해야할까?
+  for(int i=0;i<4;i++){
+    if(p->vm[i].valid) {
+      if((uint64)p->vm[i].addr <= stval && (uint64)p->vm[i].addr + p->vm[i].length > stval){
+        vm = &p->vm[i];
+        break;
+      }
+    }
+  }
+  // printf("vm selected\n");
+  if (!vm) {
+    panic("pagefault");
+  }
+
+  char *pa;
+  if(vm->flags & MAP_HUGEPAGE) pa = kalloc_huge();
+  else pa = kalloc();
+  if(pa == 0)
+    panic("kalloc");
+  // printf("addr: %p\n",vm->addr);
+  // printf("length: %d\n",vm->length);
+  // printf("flags: %d\n",vm->flags);
+
+  if(vm->flags & MAP_HUGEPAGE){
+    // printf("huge page alloc\n");
+    memset(pa, 0, HUGE_PAGE_SIZE);
+    uint64 fault_addr_head = PGHGROUNDDOWN(stval);
+    if (maphugepages(p->pagetable, fault_addr_head, HUGE_PAGE_SIZE, (uint64)pa, vm->prot | PTE_U) != 0) {
+      printf("something wrong?\n");
+      kfree_huge(pa);
+      p->killed = 1;
+    }
+  } else{
+    // printf("base page alloc\n");
+    memset(pa, 0, PGSIZE);
+    uint64 fault_addr_head = PGROUNDDOWN(stval);
+    if (mappages(p->pagetable, fault_addr_head, PGSIZE, (uint64)pa, vm->prot | PTE_U) != 0) {
+      kfree(pa);
+      p->killed = 1;
+    }
+  }
+  release(&p->lock);
+  // printf("page fault done\n");
 }
-#endif
+// #endif
+
+
+
+// pte_t *
+// walk(pagetable_t pagetable, uint64 va, int alloc)
+// {
+//   if(va >= MAXVA)
+//     panic("walk");
+
+//   for(int level = 2; level > 0; level--) {
+//     pte_t *pte = &pagetable[PX(level, va)];
+//     if(*pte & PTE_V) {
+//       pagetable = (pagetable_t)PTE2PA(*pte);
+//     } else {
+//       if(!alloc || (pagetable = (pde_t*)kalloc()) == 0)
+//         return 0;
+//       memset(pagetable, 0, PGSIZE);
+//       *pte = PA2PTE(pagetable) | PTE_V;
+//     }
+//   }
+//   return &pagetable[PX(0, va)];
+// }
+
+// int
+// mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
+// {
+//   uint64 a, last;
+//   pte_t *pte;
+
+//   if(size == 0)
+//     panic("mappages: size");
+  
+//   a = PGROUNDDOWN(va);
+//   last = PGROUNDDOWN(va + size - 1);
+//   for(;;){
+//     if((pte = walk(pagetable, a, 1)) == 0)
+//       return -1;
+//     if(*pte & PTE_V)
+//       panic("mappages: remap");
+//     *pte = PA2PTE(pa) | perm | PTE_V;
+//     if(a == last)
+//       break;
+//     a += PGSIZE;
+//     pa += PGSIZE;
+//   }
+//   return 0;
+// }

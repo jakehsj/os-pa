@@ -17,12 +17,31 @@ main(int argc, char *argv[])
 
   meminfo("Init");
   pa = ktest(KT_KALLOC, 0);
+  for(int i=0;i<355;i++){
+    pa = ktest(KT_KALLOC, 0);
+  }
   meminfo("After kalloc()");
+
   ktest(KT_KFREE, pa);
   meminfo("After kfree()");
+
   pa = ktest(KT_KALLOC_HUGE, 0);
   meminfo("After kalloc_huge()");
-  ktest(KT_KFREE_HUGE, pa);
+  pa = ktest(KT_KALLOC_HUGE, 0);
+  meminfo("After kalloc_huge()");
+
+  ktest(KT_KFREE, pa);
+  meminfo("After kfree()");
+  // printf("huge alloc %p\n", pa);
+
+  // ktest(KT_KFREE, (char*)pa);
+  // // printf("arguement: %p\n",(char*)pa+ 5*4096);
+  // meminfo("After kfree()");
+
+  ktest(KT_KFREE_HUGE, pa );
+  meminfo("After kfree_huge()");
+
+  ktest(KT_KFREE_HUGE, pa + 2*1024*1024);
   meminfo("After kfree_huge()");
   return;
 }
