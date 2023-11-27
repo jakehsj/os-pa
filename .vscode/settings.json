@@ -2,6 +2,10 @@
     "C_Cpp.errorSquiggles": "disabled",
     "files.associations": {
         "cstdlib": "c",
-        "ios": "c"
+        "ios": "c",
+        "types.h": "c",
+        "__locale": "c",
+        "bitset": "c",
+        "string_view": "c"
     }
 }

@@ -7,10 +7,10 @@ main(int argc, char *argv[])
 {
   uint64 p = (uint64) 0x100000000ULL;
 
-  mmap((void *)p, 100, PROT_WRITE, MAP_SHARED | MAP_HUGEPAGE);
-  *(int *)p = 0xdeadbeef;
-  printf("pid %d: %x\n", getpid(), *(int *)p);
+  mmap((void *)p, 100, PROT_READ, MAP_SHARED | MAP_HUGEPAGE);
   munmap((void *)p);
+  // *(int *)p = 0xdeadbeef;
+  // printf("pid %d: %x\n", getpid(), *(int *)p);
   exit(0);
   return;
 }

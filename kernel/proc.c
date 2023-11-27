@@ -17,6 +17,8 @@ struct spinlock pid_lock;
 
 // #ifdef SNU
 int pagefaults;
+extern int bprefcount[(PHYSTOP-KERNBASE) >> PGSHIFT];
+extern int hgrefcount[(PHYSTOP-KERNBASE) >> 21];
 
 pte_t *
 walk_huge(pagetable_t pagetable, uint64 va, int alloc)
@@ -56,7 +58,7 @@ maphugepages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
       return -1;
     // printf("walking done\n");
     if(*pte & PTE_V)
-      panic("mappages: remap");
+      panic("maphugepages: remap");
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
@@ -77,26 +79,32 @@ void unmap_vm(int idx, struct proc *p){
     pte_t *pte;
     for(uint64 i = (uint64)addr; i < (uint64)addr + vm->length; i+=HUGE_PAGE_SIZE){
       if((pte = walk_huge(p->pagetable, i, 0))) {
-        uint64 pa = PTE2PA(*pte);
-        *pte = 0;
-        kfree_huge((void*)pa);
+        if(*pte & PTE_V){
+          uint64 pa = PTE2PA(*pte);
+          *pte = 0;
+          kfree_huge((void*)pa);
+        }
       }
     }
-    p->vm[idx].valid = 0;
+    // p->vm[idx].valid = 0;
   }
 
   else{
     pte_t *pte;
     for(uint64 i = (uint64)addr; i < (uint64)addr + vm->length; i+=PGSIZE){
       if((pte = walk(p->pagetable, i, 0))) {
-        uint64 pa = PTE2PA(*pte);
-        *pte = 0;
-        kfree((void*)pa);
+        // printf("freeing \n");
+        if(*pte & PTE_V){
+          uint64 pa = PTE2PA(*pte);
+          *pte = 0;
+          kfree((void*)pa);
+        }
       }
     }
-    p->vm[idx].valid = 0;
+    // p->vm[idx].valid = 0;
   }
 }
+
 // #endif
 
 extern void forkret(void);
@@ -296,6 +304,7 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
+  // printf("uvmfree\n");
   uvmfree(pagetable, sz);
 }
 
@@ -363,9 +372,11 @@ growproc(int n)
 int
 fork(void)
 {
+  // printf("fork\n");
   int i, pid;
   struct proc *np;
   struct proc *p = myproc();
+  // printf("pid: %d\n",p->pid);
 
   // Allocate process.
   if((np = allocproc()) == 0){
@@ -380,7 +391,57 @@ fork(void)
   }
   np->sz = p->sz;
 
+  // printf("copy done\n");
   // 여기에 shared mapping / private mapping 
+  for(int i=0;i<4;i++){
+    // printf("inside loop i : %d\n",i);
+    np->vm[i] = p->vm[i];
+    if(np->vm[i].valid){
+      // printf("valid loop i : %d\n",i);
+      if(np->vm[i].flags & MAP_HUGEPAGE){
+        for(uint64 j=0;j<p->vm[i].length;j+=HUGE_PAGE_SIZE){
+          // printf("inside loop j : %d\n",j);
+          uint64 addr = (uint64)p->vm[i].addr + j;
+          pte_t *pte = walk_huge(p->pagetable, addr, 0);
+          uint64 perm = np->vm[i].prot | PTE_U;
+          if(pte && *pte){
+            // printf("valid loop j : %d\n",j);
+            uint64 pa = PTE2PA(*pte);
+            hgrefcount[(pa-KERNBASE)>>21]++;
+            if(p->vm[i].flags & MAP_PRIVATE){
+              *pte = (*pte) & ~(PTE_W);
+              perm = perm & ~(PTE_W);
+            }
+            maphugepages(np->pagetable, addr, HUGE_PAGE_SIZE, pa, perm);
+          }
+        }
+      } else {
+        for(uint64 j=0;j<p->vm[i].length;j+=PGSIZE){
+          // printf("inside loop j : %d\n",j);
+          uint64 addr = (uint64)p->vm[i].addr + j;
+          pte_t *pte = walk(p->pagetable, addr, 0);
+          uint64 perm = np->vm[i].prot | PTE_U;
+          if(pte && *pte){
+            // printf("valid loop j : %d\n",j);
+            uint64 pa = PTE2PA(*pte);
+            bprefcount[(pa-KERNBASE)>>PGSHIFT]++;
+            if(p->vm[i].flags & MAP_PRIVATE){
+              *pte = (*pte) & ~(PTE_W);
+              perm = perm & ~(PTE_W);
+            }
+            mappages(np->pagetable, addr, PGSIZE, pa, perm);
+          }
+        }
+      }
+    }
+  }
+  // printf("loop done\n");
+  // for(int i=0;i<64;i++){
+  //   printf("hgrefcount[%d]: %d\n",i,hgrefcount[i]);
+  // }
+
+
+  // printf("copy2 done\n");
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -407,7 +468,6 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
-
   return pid;
 }
 
@@ -437,6 +497,11 @@ exit(int status)
   acquire(&p->lock);
   for(int i=0;i<4;i++){
     unmap_vm(i,p);
+    p->vm[i].valid = 0;
+    p->vm[i].addr = NULL;
+    p->vm[i].length = 0;
+    p->vm[i].prot = 0;
+    p->vm[i].flags = 0;
   }
   // printf("unmap from exit done\n");
   release(&p->lock);
@@ -787,20 +852,70 @@ pagefault(uint64 scause, uint64 stval)
 
   struct mmapped_region *vm = NULL;
   struct proc *p = myproc();
+  int idx;
   acquire(&p->lock);
 
   // this needs change vm 을 처음에 어떻게 설정해야할까?
   for(int i=0;i<4;i++){
     if(p->vm[i].valid) {
+      // printf("vm addr: %p\n", p->vm[i].addr);
       if((uint64)p->vm[i].addr <= stval && (uint64)p->vm[i].addr + p->vm[i].length > stval){
         vm = &p->vm[i];
+        idx = i;
         break;
       }
     }
   }
   // printf("vm selected\n");
   if (!vm) {
-    panic("pagefault");
+    printf("usertrap(): unexpected scause %p pid=%d\n", scause, p->pid);
+    printf("            sepc=%p stval=%p\n", r_sepc(), stval);
+    p->killed = 1;
+    release(&p->lock);
+    return;
+  }
+
+
+
+  pte_t *pte;
+  if(scause == 15){
+    // read only
+    // printf("%p",vm->prot);
+    if(!(vm->prot & PTE_W)){
+      // printf("read only\n");
+      p->killed = 1;
+      release(&p->lock);
+      return;
+    }
+
+    if(!(vm->flags & MAP_SHARED)){
+    // private mapping cow but only one reference left
+      if(vm->flags & MAP_HUGEPAGE){
+        if((pte = walk_huge(p->pagetable, (uint64)vm->addr, 0))){
+          if(*pte & PTE_V){
+            if( hgrefcount[((uint64)PTE2PA(*pte) - KERNBASE) >> 21] == 1){
+              *pte = (*pte) | PTE_W;
+              release(&p->lock);
+              return;
+            }
+            unmap_vm(idx,p);
+          }
+        }
+      }else {
+        if((pte = walk(p->pagetable, (uint64)vm->addr, 0))){
+          if(*pte & PTE_V){
+            if(bprefcount[((uint64)PTE2PA(*pte) - KERNBASE) >> PGSHIFT] == 1){
+              // printf("ref cnt 1\n");
+              *pte = (*pte) | PTE_W;
+              release(&p->lock);
+              return;
+            }
+            // printf("unmap\n");
+            unmap_vm(idx,p);
+          }
+        }
+      }
+    }
   }
 
   char *pa;
@@ -817,9 +932,29 @@ pagefault(uint64 scause, uint64 stval)
     memset(pa, 0, HUGE_PAGE_SIZE);
     uint64 fault_addr_head = PGHGROUNDDOWN(stval);
     if (maphugepages(p->pagetable, fault_addr_head, HUGE_PAGE_SIZE, (uint64)pa, vm->prot | PTE_U) != 0) {
-      printf("something wrong?\n");
+      // printf("something wrong?\n");
       kfree_huge(pa);
       p->killed = 1;
+    } else{
+      hgrefcount[(uint64)(pa-KERNBASE)>>21] = 1;
+      if(vm->flags&MAP_SHARED){
+        // printf("ok good\n");
+        struct proc *pp;
+        int cnt = 0;
+        for(pp = proc; pp < &proc[NPROC]; pp++) {
+          if(pp == p) continue;
+          acquire(&pp->lock);
+          for(int i=0;i<4;i++){
+            if(pp->vm[i].addr == vm->addr){
+              maphugepages(pp->pagetable, fault_addr_head, HUGE_PAGE_SIZE, (uint64)pa, vm->prot | PTE_U);
+              cnt++;
+              break;
+            }
+          }
+          release(&pp->lock);
+        }
+        hgrefcount[(uint64)(pa-KERNBASE)>>21] += cnt;
+      }
     }
   } else{
     // printf("base page alloc\n");
@@ -828,6 +963,26 @@ pagefault(uint64 scause, uint64 stval)
     if (mappages(p->pagetable, fault_addr_head, PGSIZE, (uint64)pa, vm->prot | PTE_U) != 0) {
       kfree(pa);
       p->killed = 1;
+    } else{
+      bprefcount[(uint64)(pa-KERNBASE)>>PGSHIFT] = 1;
+      if(vm->flags&MAP_SHARED){
+        // printf("ok good\n");
+        struct proc *pp;
+        int cnt = 0;
+        for(pp = proc; pp < &proc[NPROC]; pp++) {
+          if(pp == p) continue;
+          acquire(&pp->lock);
+          for(int i=0;i<4;i++){
+            if(pp->vm[i].addr == vm->addr){
+              mappages(pp->pagetable, fault_addr_head, PGSIZE, (uint64)pa, vm->prot | PTE_U);
+              cnt++;
+              break;
+            }
+          }
+          release(&pp->lock);
+        }
+        bprefcount[(uint64)(pa-KERNBASE)>>PGSHIFT] += cnt;
+      }
     }
   }
   release(&p->lock);

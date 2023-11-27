@@ -285,6 +285,7 @@ freewalk(pagetable_t pagetable)
       panic("freewalk: leaf");
     }
   }
+  // printf("free pagetable %p\n",pagetable);
   kfree((void*)pagetable);
 }
 

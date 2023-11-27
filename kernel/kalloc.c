@@ -16,7 +16,10 @@ void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
-int is_allocated[64];
+int is_allocated[64]; // huge page alloc from Kernbase ~ phystop 
+
+int bprefcount[(PHYSTOP-KERNBASE) >> PGSHIFT];
+int hgrefcount[(PHYSTOP-KERNBASE) >> 21];
 
 struct run {
   struct run *next;
@@ -44,10 +47,12 @@ freerange(void *pa_start, void *pa_end)
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE){
+    bprefcount[((uint64)p - KERNBASE) >> PGSHIFT] = 0;
     kfree(p);
-    used4k += 1;
-    freemem = 32 * 1024 - used4k - used2m * 512;
   }
+  // printf("hi~~\n");
+  freemem = ((uint64)pa_end - (uint64)pa_start) / PGSIZE;
+  used4k = 32*1024 - freemem;
 }
 
 // Free the page of physical memory pointed at by pa,
@@ -63,15 +68,24 @@ kfree(void *pa)
     panic("kfree");
 
   if(is_allocated[(PGHGROUNDDOWN((uint64)pa) / HUGE_PAGE_SIZE) - 1024]){
-    printf("kfree pa: %p", pa);
-    printf("idx: %d",(PGHGROUNDDOWN((uint64)pa)  / HUGE_PAGE_SIZE)-1024);
+    // printf("kfree pa: %p", pa);
+    // printf("idx: %d",(PGHGROUNDDOWN((uint64)pa)  / HUGE_PAGE_SIZE)-1024);
     panic("kfree");
   }
 
   // Fill with junk to catch dangling refs.
-  memset(pa, 1, PGSIZE);
-
+  
   acquire(&kmem.lock);
+  
+  if(bprefcount[((uint64)pa - KERNBASE) >> PGSHIFT] > 1){
+    // printf("%d\n",bprefcount[((uint64)pa - KERNBASE) >> PGSHIFT]);
+    bprefcount[((uint64)pa - KERNBASE) >> PGSHIFT]-=1;
+    release(&kmem.lock);
+    return;
+  }
+  bprefcount[((uint64)pa - KERNBASE) >> PGSHIFT]-=1;
+
+  memset(pa, 1, PGSIZE);
   for (prev = NULL, r = kmem.freelist; 
        r != NULL && (void *)r > pa; 
        prev = r, r = r->next);
@@ -88,7 +102,7 @@ kfree(void *pa)
     prev->next = (struct run*)pa;
   }
   used4k -= 1;
-  freemem = 32 * 1024 - used4k - used2m * 512;
+  freemem += 1;
 
   release(&kmem.lock);
 }
@@ -128,7 +142,7 @@ kalloc(void)
           kmem.freelist = kmem.freelist->next;
         }
         used4k += 1;
-        freemem = 32 * 1024 - used4k - used2m * 512;
+        freemem -= 1;
         release(&kmem.lock);
 
         memset((char*)r, 5, PGSIZE); // Fill with junk
@@ -143,7 +157,7 @@ kalloc(void)
       }
 
       used4k += 1;
-      freemem = 32 * 1024 - used4k - used2m * 512;
+      freemem -=1;
       release(&kmem.lock);
 
       if (r) {
@@ -158,7 +172,7 @@ kalloc(void)
   if(r){
     kmem.freelist = r->next;
     used4k += 1;
-    freemem = 32 * 1024 - used4k - used2m * 512;
+    freemem -=1;
   }
   release(&kmem.lock);
 
@@ -198,7 +212,7 @@ void *kalloc_huge() {
               start->next = r->next;
           }
           used2m += 1;
-          freemem = 32 * 1024 - used4k - used2m * 512;
+          freemem -=512;
           // printf("huge alloc idx : %d\n",((uint64)r / HUGE_PAGE_SIZE) - 1024);
           // printf("return pa : %p\n",r);
           is_allocated[((uint64)r / HUGE_PAGE_SIZE) - 1024] = 1;
@@ -240,9 +254,16 @@ void kfree_huge(void *pa) {
 
   if(pa == r) panic("kfree_huge");
 
-  memset(pa,1,HUGE_PAGE_SIZE);
 
   acquire(&kmem.lock);
+  if(hgrefcount[((uint64)pa - KERNBASE) >> 21] > 1){
+    hgrefcount[((uint64)pa - KERNBASE) >> 21] -= 1;
+    release(&kmem.lock);
+    return;
+  }
+  hgrefcount[((uint64)pa - KERNBASE) >> 21] -= 1;
+
+  memset(pa,1,HUGE_PAGE_SIZE);
   is_allocated[((uint64)pa / HUGE_PAGE_SIZE)-1024] = 0;
   // printf("i disallocated it\n");
   // printf("pa : %p\n",pa);
@@ -260,7 +281,7 @@ void kfree_huge(void *pa) {
     pa = (char*)pa + PGSIZE;
   }
   used2m -= 1;
-  freemem = 32 * 1024 - used4k - used2m * 512;
+  freemem += 512;
   release(&kmem.lock);
 }
 

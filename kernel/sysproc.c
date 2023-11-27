@@ -149,7 +149,7 @@ sys_mmap(void)
       vm =  &p->vm[i];
     } else{
       if(p->vm[i].addr <= addr && (uint64)(p->vm[i].addr) + length > (uint64)addr){
-        // printf("mmap bad\n");
+        printf("mmap bad\n");
         release(&p->lock);
         return 0;
       }
@@ -177,7 +177,7 @@ sys_munmap(void)
   void *addr;
   argaddr(0, (uint64 *)&addr);
   if (addr < (void*)PHYSTOP || addr > (void*)(MAXVA-0x10000000)){
-    printf("addr: %p\n",addr);
+    // printf("addr: %p\n",addr);
     return -1;
   }
   // check if addr alligned
@@ -209,6 +209,11 @@ sys_munmap(void)
 
   // printf("before unmap_vm\n");
   unmap_vm(idx,p);
+  p->vm[idx].valid = 0;
+  p->vm[idx].addr = NULL;
+  p->vm[idx].length = 0;
+  p->vm[idx].prot = 0;
+  p->vm[idx].flags = 0;
   // printf("after unmap_vm\n");
   release(&p->lock);
   return 0;  // 성공 시 0 반환

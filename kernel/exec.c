@@ -34,6 +34,12 @@ exec(char *path, char **argv)
   acquire(&p->lock);
   for(int i=0;i<4;i++){
     unmap_vm(i,p);
+    p->vm[i].valid = 0;
+    p->vm[i].valid = 0;
+    p->vm[i].addr = NULL;
+    p->vm[i].length = 0;
+    p->vm[i].prot = 0;
+    p->vm[i].flags = 0;
   }
   release(&p->lock);
 
