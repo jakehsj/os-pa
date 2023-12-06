@@ -17,4 +17,4 @@ This repository contains my work for the Operating System course at SNU, focusin
 ### PA4 - mmap with Huge Pages
 - **Branch:** `pa4`
 - **Description:** This branch features the implementation of advanced memory management functionalities in the xv6 kernel. It includes the development of kalloc_huge() and kfree_huge() functions for efficient 2MiB huge page allocation and deallocation, ensuring alignment and compatibility with existing 4KiB page sizes. The branch also introduces modified mmap() and munmap() system calls to support both standard and huge page mappings, alongside intricate handling of memory-mapped regions with fork(). The implementation is rigorously designed to prevent memory leaks, maintaining system integrity and performance.
-- **Link:** Not yet uploaded due to course policy
+- **Link:** [PA4 - mmap() with Huge Pages](https://github.com/jakehsj/os-pa/tree/pa4)
